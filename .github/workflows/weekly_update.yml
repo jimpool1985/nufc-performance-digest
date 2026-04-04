@@ -1,0 +1,40 @@
+name: Weekly Research Digest Update
+
+on:
+  schedule:
+    # Runs every Monday at 7:00 AM UK time (6:00 AM UTC)
+    - cron: '0 6 * * 1'
+  # Also allows you to trigger it manually from GitHub if needed
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-digest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install anthropic
+
+      - name: Run weekly digest update
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/update_digest.py
+
+      - name: Commit and push updated dashboard
+        run: |
+          git config --global user.name  "NUFC Digest Bot"
+          git config --global user.email "digest-bot@nufc.co.uk"
+          git add "NUFC - Performance Department Research Dashboard.html"
+          git diff --staged --quiet || git commit -m "Weekly digest update — $(date +'Week %V · %A %d %B %Y')"
+          git push
