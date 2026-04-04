@@ -10,6 +10,7 @@ import json
 import re
 import datetime
 import anthropic
+import time
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 HTML_PATH = "NUFC - Performance Department Research Dashboard.html"
@@ -139,6 +140,7 @@ def main():
     all_cards = []
     for discipline in DISCIPLINES:
         cards = search_research_for_discipline(client, discipline)
+        time.sleep(15)
         print(f"    Found {len(cards)} studies for {discipline['label']}")
         all_cards.extend(cards)
 
