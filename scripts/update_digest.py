@@ -19,13 +19,13 @@ DATA_BLOCK_START = "// ── DATA BLOCK START"
 DATA_BLOCK_END   = "// ── DATA BLOCK END"
 
 DISCIPLINES = [
-    {"id": "medicine",    "label": "Sports Medicine",           "query": "football soccer sports medicine injury prevention rehabilitation 2026"},
-    {"id": "performance", "label": "Performance & S&C",         "query": "football soccer strength conditioning performance S&C training 2026"},
-    {"id": "science",     "label": "Sport Science & Technology", "query": "football soccer sport science GPS load monitoring technology 2026"},
-    {"id": "psychology",  "label": "Sport Psychology",          "query": "football soccer sport psychology mental performance wellbeing 2026"},
-    {"id": "nutrition",   "label": "Nutrition",                 "query": "football soccer nutrition diet carbohydrate hydration athlete 2026"},
-    {"id": "women",       "label": "Women's Football",          "query": "women female football soccer research performance science 2026"},
-    {"id": "academy",     "label": "Academy & Youth Development","query": "youth academy football development talent young players 2026"},
+    {"id": "medicine",    "label": "Sports Medicine",            "query": "football soccer sports medicine injury prevention rehabilitation 2026"},
+    {"id": "performance", "label": "Performance & S&C",          "query": "football soccer strength conditioning performance S&C training 2026"},
+    {"id": "science",     "label": "Sport Science & Technology",  "query": "football soccer sport science GPS load monitoring technology 2026"},
+    {"id": "psychology",  "label": "Sport Psychology",           "query": "football soccer sport psychology mental performance wellbeing 2026"},
+    {"id": "nutrition",   "label": "Nutrition",                  "query": "football soccer nutrition diet carbohydrate hydration athlete 2026"},
+    {"id": "women",       "label": "Women's Football",           "query": "women female football soccer research performance science 2026"},
+    {"id": "academy",     "label": "Academy & Youth Development", "query": "youth academy football development talent young players 2026"},
 ]
 
 def get_week_info():
@@ -68,29 +68,34 @@ IMPORTANT:
 - Badge options: "New study", "Systematic review", "RCT", "Case report", "Perspective", "Open access", "Framework", "Prospective study", "Opinion", "Meta-analysis"
 - Return ONLY the JSON array, no other text, no markdown code blocks"""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=2000,
-        tools=[{"type": "web_search_20250305", "name": "web_search"}],
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    full_text = ""
-    for block in response.content:
-        if hasattr(block, "text"):
-            full_text += block.text
-
     try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2000,
+            tools=[{"type": "web_search_20250305", "name": "web_search"}],
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        full_text = ""
+        for block in response.content:
+            if hasattr(block, "text"):
+                full_text += block.text
+
         clean = full_text.strip()
         if clean.startswith("```"):
             clean = re.sub(r"^```[a-z]*\n?", "", clean)
             clean = re.sub(r"\n?```$", "", clean)
+
         cards = json.loads(clean)
         if isinstance(cards, list):
             return cards
+
+    except anthropic.RateLimitError:
+        print(f"    Rate limit hit for {discipline['label']} — waiting 60 seconds...")
+        time.sleep(60)
+        return []
     except Exception as e:
-        print(f"    Warning: Could not parse JSON for {discipline['label']}: {e}")
-        print(f"    Raw response: {full_text[:200]}")
+        print(f"    Warning: Could not parse response for {discipline['label']}: {e}")
 
     return []
 
@@ -102,10 +107,8 @@ def extract_current_data(html):
     """Extract THIS_WEEK and ARCHIVE from existing HTML."""
     this_match = re.search(r"const THIS_WEEK=(\{.*?\});", html, re.DOTALL)
     arch_match  = re.search(r"const ARCHIVE=(\[.*?\]);",   html, re.DOTALL)
-
     this_week = json.loads(this_match.group(1)) if this_match else None
     archive   = json.loads(arch_match.group(1))  if arch_match  else []
-
     return this_week, archive
 
 def build_new_html(html, new_this_week, new_archive):
@@ -118,10 +121,10 @@ def build_new_html(html, new_this_week, new_archive):
 
     new_block = (
         f"{DATA_BLOCK_START} — replaced automatically on each weekly update ——\n"
-        f"// {'═' * 76}\n"
+        f"// {'=' * 76}\n"
         f"const THIS_WEEK={this_json};\n"
         f"const ARCHIVE={archive_json};\n"
-        f"// {'═' * 76}\n"
+        f"// {'=' * 76}\n"
         f"{DATA_BLOCK_END}"
     )
 
@@ -138,9 +141,13 @@ def main():
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
     all_cards = []
-    for discipline in DISCIPLINES:
+    for i, discipline in enumerate(DISCIPLINES):
+        # Pause between searches to stay within rate limits
+        if i > 0:
+            print(f"    Pausing 30 seconds before next search...")
+            time.sleep(30)
+
         cards = search_research_for_discipline(client, discipline)
-        time.sleep(15)
         print(f"    Found {len(cards)} studies for {discipline['label']}")
         all_cards.extend(cards)
 
